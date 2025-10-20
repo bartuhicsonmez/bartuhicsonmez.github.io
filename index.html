@@ -3,9 +3,239 @@
 <head>
   <meta charset="UTF-8">
   <title>Bartu Hicsonmez</title>
+  <style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  /* 🔧 AYARLAR */
+  :root {
+    --background-height: 3100px;
+    --scroll-height: 3100px;
+    --move-speed: 1.4;
+    --character-top: 2750px;
+    --character-size: 275px;
+  }
+
+  html, body {
+    margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:black;
+  }
+
+  #wrapper {
+    width:100vw;
+    position:relative;
+    transform:translateY(0);
+    transition: transform 3s cubic-bezier(0.42,0,0.58,1);
+  }
+
+  /* ARKA PLAN */
+  #background {
+    position:absolute;
+    top:0; left:0;
+    width:100%; 
+    height:var(--background-height);
+    background-image: url('assets/PortfolyoArkaPlanLong.png');
+    background-size: cover;
+    background-repeat: repeat-x;
+    background-position: 0 top;
+    z-index:1;
+  }
+
+  /* Overlay 1: Yazılar */
+  #overlay1 {
+    position:fixed; 
+    top:40vh; 
+    left:50%; 
+    transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; 
+    z-index:10;
+  }
+
+  .pixel-title {
+    font-family:'Press Start 2P', monospace;
+    font-size:2rem; color:white; margin-bottom:12px;
+  }
+
+  #pressStart {
+    font-family:'Press Start 2P', monospace;
+    background:none; border:2px solid white; color:white;
+    padding:0.8rem 2rem; cursor:pointer;
+    animation: blink 1s step-start infinite; opacity:0; transition:opacity 0.5s ease;
+  }
+  @keyframes blink {0%,50%,100%{opacity:1;}25%,75%{opacity:0;}}
+
+  /* Karakter */
+  #character {
+    position:absolute;
+    top:var(--character-top);
+    left:50%;
+    transform:translateX(-50%);
+    z-index:20;
+  }
+
+  #charImage {
+    width:var(--character-size);
+    height:var(--character-size);
+    object-fit: contain;
+    display:block;
+    image-rendering: pixelated;
+  }
+
+  /* Yumruk alanı (tam karakter boyutunda, tıklanabilir) */
+  #punchArea {
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    cursor:pointer;
+    background:rgba(0,0,0,0); /* görünmez */
+    z-index:30;
+  }
+
+  /* Görünmez butonlar */
+  #leftButton, #rightButton {
+    position:absolute; top:0; width:35%; height:var(--background-height); z-index:5; background:rgba(0,0,0,0);
+  }
+  #leftButton { left:0; } 
+  #rightButton { right:0; }
+  </style>
 </head>
-<body style="background:black; color:white; font-family:sans-serif;">
-  <h1>Hello World!</h1>
-  <p>Site çalışıyor 🎉</p>
+<body>
+  <div id="wrapper"> 
+    <!-- Arka Plan -->
+    <div id="background"></div>
+
+    <!-- Overlay 1: Yazılar -->
+    <div id="overlay1">
+      <h1 class="pixel-title">BARTU HICSONMEZ</h1>
+      <button id="pressStart">PRESS START</button>
+    </div>
+
+    <!-- Karakter -->
+    <div id="character">
+      <img id="charImage" src="assets/IdleRight.gif" alt="Karakter">
+      <!-- Yumruk tıklama alanı -->
+      <div id="punchArea"></div>
+    </div>
+
+    <!-- Görünmez butonlar -->
+    <div id="leftButton"></div>
+    <div id="rightButton"></div>
+  </div>
+
+  <script>
+  const wrapper = document.getElementById("wrapper");
+  const pressStart = document.getElementById("pressStart");
+  const bg = document.getElementById("background");
+  const leftBtn = document.getElementById("leftButton");
+  const rightBtn = document.getElementById("rightButton");
+  const charImage = document.getElementById("charImage");
+  const punchArea = document.getElementById("punchArea");
+
+  let bgPosX = 0;
+  const moveSpeed = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--move-speed')); 
+  let moveDirection = 0;
+  let lastDirection = "right";
+  let isPunching = false;
+  let punchCooldown = false;
+  let queuedPunch = false;
+
+  // GIF linkleri (artık assets klasöründen)
+  const gifs = {
+    idleRight: "assets/IdleRight.gif",
+    idleLeft:  "assets/IdleLeft.gif",
+    walkRight: "assets/WalkRight.gif",
+    walkLeft:  "assets/WalkLeft.gif",
+    punch1_right: "assets/RightPunch1.gif",
+    punch2_right: "assets/RightPunch2.gif",
+    punch1_left: "assets/LeftPunch1.gif",
+    punch2_left: "assets/LeftPunch2.gif"
+  };
+
+  // Press Start 2 saniye sonra belirsin
+  setTimeout(()=>{pressStart.style.opacity=1;},2000);
+
+  // Press Start click → aşağı inme
+  pressStart.addEventListener("click", ()=>{
+    const viewportHeight = window.innerHeight;
+    const scrollHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--scroll-height')); 
+    const translateY = scrollHeight - viewportHeight;
+    wrapper.style.transform = `translateY(-${translateY}px)`;
+  });
+
+  /* Sol buton → ekran sağa kayar, karakter sola yürür */
+  leftBtn.addEventListener("mouseenter", ()=>{
+    moveDirection = 1;  
+    charImage.src = gifs.walkLeft;  
+    lastDirection = "left";
+    isPunching = false;
+  });
+  leftBtn.addEventListener("mouseleave", ()=>{
+    moveDirection = 0;
+    if(!isPunching){
+      charImage.src = (lastDirection === "right" ? gifs.idleRight : gifs.idleLeft);
+    }
+  });
+
+  /* Sağ buton → ekran sola kayar, karakter sağa yürür */
+  rightBtn.addEventListener("mouseenter", ()=>{
+    moveDirection = -1;  
+    charImage.src = gifs.walkRight; 
+    lastDirection = "right";
+    isPunching = false;
+  });
+  rightBtn.addEventListener("mouseleave", ()=>{
+    moveDirection = 0;
+    if(!isPunching){
+      charImage.src = (lastDirection === "right" ? gifs.idleRight : gifs.idleLeft);
+    }
+  });
+
+  // Yumruk tıklama (combo sistemi)
+  punchArea.addEventListener("click", ()=>{
+    if(punchCooldown) {
+      if(isPunching) queuedPunch = true;
+      return;
+    }
+
+    punchCooldown = true;
+    isPunching = true;
+    const punchDir = lastDirection === "right" ? "right" : "left";
+
+    // Punch1
+    charImage.src = gifs[`punch1_${punchDir}`];
+    setTimeout(()=>{
+      isPunching = false;
+
+      if(queuedPunch) {
+        queuedPunch = false;
+        isPunching = true;
+        // Punch2
+        charImage.src = gifs[`punch2_${punchDir}`];
+        setTimeout(()=>{
+          isPunching = false;
+          if(moveDirection === 0){
+            charImage.src = gifs[`idle${punchDir[0].toUpperCase()+punchDir.slice(1)}`];
+          }
+          punchCooldown = false;
+        }, 425);
+      } else {
+        if(moveDirection === 0){
+          charImage.src = gifs[`idle${punchDir[0].toUpperCase()+punchDir.slice(1)}`];
+        }
+        punchCooldown = false;
+      }
+
+    }, 225);
+  });
+
+  // Loop hareketi
+  function animateBG(){
+    if(moveDirection !== 0){
+      bgPosX += moveDirection * moveSpeed;
+      bg.style.backgroundPosition = `${bgPosX}px top`;
+    }
+    requestAnimationFrame(animateBG);
+  }
+  animateBG();
+  </script>
 </body>
 </html>
