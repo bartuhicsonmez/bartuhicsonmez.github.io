@@ -13,6 +13,11 @@
     --move-speed: 1.4;
     --character-top: 2750px;
     --character-size: 275px;
+
+    /* Yeni ayarlar */
+    --walk-delay: 2000;     /* Karakter girişi öncesi bekleme (ms) */
+    --walk-speed: 6;        /* Karakter giriş hızı (px/frame) */
+    --controls-delay: 7500; /* Kontrollerin aktifleşme süresi (ms) */
   }
 
   html, body {
@@ -26,7 +31,6 @@
     transition: transform 3s cubic-bezier(0.42,0,0.58,1);
   }
 
-  /* ARKA PLAN */
   #background {
     position:absolute;
     top:0; left:0;
@@ -39,7 +43,6 @@
     z-index:1;
   }
 
-  /* Overlay 1: Yazılar */
   #overlay1 {
     position:fixed; 
     top:40vh; 
@@ -62,12 +65,10 @@
   }
   @keyframes blink {0%,50%,100%{opacity:1;}25%,75%{opacity:0;}}
 
-  /* Karakter */
   #character {
     position:absolute;
     top:var(--character-top);
-    left:50%;
-    transform:translateX(-50%);
+    left:-400px; /* karakter başlangıçta ekran dışında */
     z-index:20;
   }
 
@@ -79,20 +80,21 @@
     image-rendering: pixelated;
   }
 
-  /* Yumruk alanı (tam karakter boyutunda, tıklanabilir) */
   #punchArea {
     position:absolute;
     top:0; left:0;
     width:100%;
     height:100%;
     cursor:pointer;
-    background:rgba(0,0,0,0); /* görünmez */
+    background:rgba(0,0,0,0);
     z-index:30;
+    pointer-events:none; /* Başlangıçta devre dışı */
   }
 
-  /* Görünmez butonlar */
   #leftButton, #rightButton {
-    position:absolute; top:0; width:35%; height:var(--background-height); z-index:5; background:rgba(0,0,0,0);
+    position:absolute; top:0; width:35%; height:var(--background-height);
+    z-index:5; background:rgba(0,0,0,0);
+    pointer-events:none; /* Başlangıçta devre dışı */
   }
   #leftButton { left:0; } 
   #rightButton { right:0; }
@@ -100,23 +102,18 @@
 </head>
 <body>
   <div id="wrapper"> 
-    <!-- Arka Plan -->
     <div id="background"></div>
 
-    <!-- Overlay 1: Yazılar -->
     <div id="overlay1">
       <h1 class="pixel-title">BARTU HICSONMEZ</h1>
       <button id="pressStart">PRESS START</button>
     </div>
 
-    <!-- Karakter -->
     <div id="character">
       <img id="charImage" src="assets/IdleRight.gif" alt="Karakter">
-      <!-- Yumruk tıklama alanı -->
       <div id="punchArea"></div>
     </div>
 
-    <!-- Görünmez butonlar -->
     <div id="leftButton"></div>
     <div id="rightButton"></div>
   </div>
@@ -127,6 +124,7 @@
   const bg = document.getElementById("background");
   const leftBtn = document.getElementById("leftButton");
   const rightBtn = document.getElementById("rightButton");
+  const char = document.getElementById("character");
   const charImage = document.getElementById("charImage");
   const punchArea = document.getElementById("punchArea");
 
@@ -138,7 +136,6 @@
   let punchCooldown = false;
   let queuedPunch = false;
 
-  // GIF linkleri (artık assets klasöründen)
   const gifs = {
     idleRight: "assets/IdleRight.gif",
     idleLeft:  "assets/IdleLeft.gif",
@@ -150,18 +147,45 @@
     punch2_left: "assets/LeftPunch2.gif"
   };
 
-  // Press Start 2 saniye sonra belirsin
   setTimeout(()=>{pressStart.style.opacity=1;},2000);
 
-  // Press Start click → aşağı inme
+  // Press Start click
   pressStart.addEventListener("click", ()=>{
+    // 1) Kaydırma
     const viewportHeight = window.innerHeight;
     const scrollHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--scroll-height')); 
     const translateY = scrollHeight - viewportHeight;
     wrapper.style.transform = `translateY(-${translateY}px)`;
+
+    // 2) Karakter yürüyüşü (walkDelay)
+    const walkDelay = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--walk-delay'));
+    const walkSpeed = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--walk-speed'));
+    setTimeout(()=>{
+      charImage.src = gifs.walkRight;
+      let pos = -400;
+      const targetX = window.innerWidth / 2 - (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--character-size')) / 2);
+
+      const walkInterval = setInterval(()=>{
+        pos += walkSpeed;
+        char.style.left = pos + "px";
+        if(pos >= targetX){
+          clearInterval(walkInterval);
+          char.style.left = targetX + "px";
+          charImage.src = gifs.idleRight;
+        }
+      }, 30);
+    }, walkDelay);
+
+    // 3) Kontrolleri açma (controlsDelay)
+    const controlsDelay = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--controls-delay'));
+    setTimeout(()=>{
+      leftBtn.style.pointerEvents = "auto";
+      rightBtn.style.pointerEvents = "auto";
+      punchArea.style.pointerEvents = "auto";
+    }, controlsDelay);
   });
 
-  /* Sol buton → ekran sağa kayar, karakter sola yürür */
+  // Sol buton
   leftBtn.addEventListener("mouseenter", ()=>{
     moveDirection = 1;  
     charImage.src = gifs.walkLeft;  
@@ -175,7 +199,7 @@
     }
   });
 
-  /* Sağ buton → ekran sola kayar, karakter sağa yürür */
+  // Sağ buton
   rightBtn.addEventListener("mouseenter", ()=>{
     moveDirection = -1;  
     charImage.src = gifs.walkRight; 
@@ -189,26 +213,22 @@
     }
   });
 
-  // Yumruk tıklama (combo sistemi)
+  // Yumruk (combo)
   punchArea.addEventListener("click", ()=>{
     if(punchCooldown) {
       if(isPunching) queuedPunch = true;
       return;
     }
-
     punchCooldown = true;
     isPunching = true;
     const punchDir = lastDirection === "right" ? "right" : "left";
 
-    // Punch1
     charImage.src = gifs[`punch1_${punchDir}`];
     setTimeout(()=>{
       isPunching = false;
-
       if(queuedPunch) {
         queuedPunch = false;
         isPunching = true;
-        // Punch2
         charImage.src = gifs[`punch2_${punchDir}`];
         setTimeout(()=>{
           isPunching = false;
@@ -223,11 +243,10 @@
         }
         punchCooldown = false;
       }
-
     }, 225);
   });
 
-  // Loop hareketi
+  // Arka plan hareketi
   function animateBG(){
     if(moveDirection !== 0){
       bgPosX += moveDirection * moveSpeed;
